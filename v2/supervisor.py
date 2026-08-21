@@ -22,9 +22,9 @@ OLLAMA_API = "http://localhost:11434/api/generate"
 DEFAULT_MODEL = "llama3.2:3b"
 
 DATABASE_URL = (
-    "dbname=agentdb "
-    "user=postgres "
-    "password=secret "
+    "dbname=multi_agent_coder"
+    "user=postgres"
+    "password=password"
     "host=localhost"
 )
 
@@ -48,7 +48,7 @@ def call_local_llm(
         "stream": False,
 
         "options": {
-            "num_ctx": 4096,
+            "num_ctx": 32000,
             "temperature": 0.2,
             "num_predict": 1024,
         },
@@ -155,14 +155,14 @@ def normalize_task_checklist(
         start=1
     ):
 
-        files = task.get(
+        files_affected = task.get(
             "files_affected",
             []
         )
 
-        normalized_files = []
+        files = []
 
-        for file in files:
+        for file in files_affected:
 
             # ------------------------------------------------
             # New format:
@@ -173,31 +173,41 @@ def normalize_task_checklist(
             # }
             # ------------------------------------------------
 
-            if isinstance(file, dict):
+            if isinstance(file_info, str):
 
-                normalized_files.append({
-                    "path": file.get(
-                        "path",
-                        ""
-                    ),
-                    "change_type": file.get(
-                        "change_type",
-                        "edit"
-                    ),
+                files.append({
+                    "path": file_info,
+                    "change_type": "edit"
                 })
 
-            # ------------------------------------------------
-            # Backward compatible:
-            #
-            # "db/schema.sql"
-            # ------------------------------------------------
+                continue
 
-            else:
+            if not isinstance(
+                file_info,
+                dict
+            ):
+                continue
 
-                normalized_files.append({
-                    "path": str(file),
-                    "change_type": "edit",
-                })
+            path = file_info.get("path")
+
+            if not path:
+                continue
+
+            change_type = file_info.get(
+                "change_type",
+                "edit"
+            )
+
+            if change_type not in (
+                "edit",
+                "create"
+            ):
+                change_type = "edit"
+
+            files.append({
+                "path": path,
+                "change_type": change_type
+            })
 
         normalized.append({
             "step_id": task.get(
@@ -423,29 +433,137 @@ def run_supervisor(
     # 5. SYSTEM PROMPT
     # ========================================================
 
-    system_prompt = """
-You are the Supervisor of a multi-agent software
-development system.
+    SUPERVISOR_SYSTEM_PROMPT = """
+You are the SUPERVISOR AGENT in a software engineering orchestration system.
 
-You convert user requirements into a sequential
-implementation plan.
+You are NOT a coder.
+You are NOT an architect.
+You are NOT allowed to generate source code.
 
-You have access to repository context supplied by
-the application.
+Your ONLY responsibility is:
 
-Repository facts are authoritative.
-
-Rules:
-
-1. Do not invent existing files.
-2. Existing files must use change_type "edit".
-3. New files must use change_type "create".
-4. Keep the number of affected files minimal.
-5. Respect the detected project architecture.
-6. Respect existing coding patterns.
+1. Understand the user's software requirement.
+2. Inspect the supplied repository context.
+3. Decompose the requirement into a small ordered sequence of implementation tasks.
+4. Identify the existing files that must be edited.
+5. Identify files that must be created only when necessary.
+6. Assign each task a technical domain.
 7. Order tasks according to dependencies.
-8. Assign each task to an appropriate domain.
-9. Return ONLY valid JSON.
+
+============================================================
+STRICT OUTPUT CONTRACT
+============================================================
+
+Your response MUST be valid JSON.
+
+Your response MUST contain EXACTLY this top-level structure:
+
+{
+  "task_checklist": [
+    {
+      "step_id": 1,
+      "domain": "string",
+      "description": "string",
+      "files_affected": [
+        {
+          "path": "string",
+          "change_type": "edit"
+        }
+      ]
+    }
+  ]
+}
+
+The following fields are REQUIRED:
+
+task_checklist
+step_id
+domain
+description
+files_affected
+path
+change_type
+
+change_type MUST be one of:
+
+"edit"
+"create"
+
+============================================================
+STRICT RULES
+============================================================
+
+DO NOT output:
+
+- source code
+- TypeScript
+- JavaScript
+- Python
+- SQL
+- Markdown
+- explanations
+- comments outside JSON
+- ``` fences
+- "Here is..."
+- "I modified..."
+- implementation details that belong to the Coder
+
+DO NOT implement the requirement.
+
+DO NOT return technical specifications.
+
+DO NOT return generated code.
+
+DO NOT return the complete AgentOrchestratorState.
+
+Return ONLY the task_checklist state update.
+
+============================================================
+FILE RULES
+============================================================
+
+If a file exists in the repository context:
+
+    change_type = "edit"
+
+If the file does not exist and is genuinely required:
+
+    change_type = "create"
+
+Never invent a file when an existing file can be modified.
+
+Prefer the smallest possible set of affected files.
+
+Use repository paths exactly as supplied by the context.
+
+============================================================
+TASK RULES
+============================================================
+
+Each task must represent one coherent implementation step.
+
+Tasks must be ordered by dependency.
+
+Example:
+
+1. database/schema
+2. backend/service
+3. backend/controller
+4. frontend/service
+5. frontend/component
+6. tests
+
+Do not combine unrelated changes into one task.
+
+============================================================
+FINAL REQUIREMENT
+============================================================
+
+Return JSON ONLY.
+
+The first character of your response MUST be '{'.
+
+The last character of your response MUST be '}'.
 """
 
     # ========================================================
@@ -454,7 +572,7 @@ Rules:
 
     response = call_local_llm(
         prompt=prompt,
-        system_prompt=system_prompt,
+        system_prompt=SUPERVISOR_SYSTEM_PROMPT,
     )
 
     # ========================================================
@@ -478,7 +596,9 @@ Rules:
         raise RuntimeError(
             "Supervisor failed to generate "
             "a task checklist.\n\n"
-            f"Ollama response:\n{response}"
+            f"Ollama response:\n{response}\n"
+            f"Parsed response:\n{parsed}\n"
+            f"task list:\n{task_checklist}"
         )
 
     # ========================================================

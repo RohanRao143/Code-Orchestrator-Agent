@@ -10,7 +10,8 @@ DB_NAME = "multi_agent_coder"
 SCHEMA_FILE = "schema.sql"
 
 # Retrieve password from environment variable if it exists
-PG_PASSWORD = os.getenv("PGPASSWORD")
+# PG_PASSWORD = os.getenv("PGPASSWORD")
+PG_PASSWORD = 'password'
 
 
 def run_psql_command(command_args, stdin_file=None):

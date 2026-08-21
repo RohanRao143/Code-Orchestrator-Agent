@@ -6,10 +6,14 @@ from orchestrator import app
 # INDEX PROJECT
 # ============================================================
 
+# project_id = init_context([
+#     "./backend",
+#     "./frontend",
+#     "./database",
+# ])
+
 project_id = init_context([
-    "./backend",
-    "./frontend",
-    "./database",
+    "../../../Repo-0011-BeED-UI"
 ])
 
 
@@ -17,19 +21,26 @@ project_id = init_context([
 # USER REQUIREMENT
 # ============================================================
 
+# requirement = """
+# Add audit logging to all authenticated API requests.
+
+# Store:
+
+# - user ID
+# - endpoint
+# - HTTP method
+# - timestamp
+# - response status
+
+# in PostgreSQL.
+# """
+
 requirement = """
-Add audit logging to all authenticated API requests.
+Add enable preview option inside experio over oview settings, with a preview icon and a toggle button.
 
-Store:
-
-- user ID
-- endpoint
-- HTTP method
-- timestamp
-- response status
-
-in PostgreSQL.
+Enabling it should send preview_enabled boolean option property to api 
 """
+
 
 
 # ============================================================

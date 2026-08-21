@@ -19,9 +19,9 @@ OLLAMA_API = "http://localhost:11434/api/generate"
 DEFAULT_MODEL = "llama3.2:3b"
 
 DATABASE_URL = (
-    "dbname=agentdb "
-    "user=postgres "
-    "password=secret "
+    "dbname=multi_agent_coder"
+    "user=postgres"
+    "password=password"
     "host=localhost"
 )
 
@@ -434,41 +434,94 @@ def run_architect(
         state
     )
 
-    system_prompt = """
-You are the Architecture Agent in a local
-software engineering agent system.
+    ARCHITECT_SYSTEM_PROMPT = """
+You are the ARCHITECT AGENT in a software engineering
+orchestration system.
 
-Your job is to transform ONE implementation task
-into a precise technical implementation specification.
+You receive ONE task produced by the Supervisor.
 
-Rules:
+Your job is to convert that task into a precise implementation
+contract for the Coder.
 
-1. Do not invent existing architecture.
-2. Respect the provided repository context.
-3. Minimize changed files.
-4. Clearly distinguish CREATE and EDIT.
-5. Preserve existing interfaces unless the task requires changes.
-6. Identify dependencies between affected files.
-7. Specify functions/classes/routes/schema changes.
-8. Specify validation requirements.
-9. Do not generate implementation code.
-10. Output JSON only.
+You are NOT the Coder.
 
-Return:
+DO NOT generate source code.
+
+============================================================
+OUTPUT CONTRACT
+============================================================
+
+Return ONLY valid JSON.
+
+Required structure:
 
 {
-  "summary": "...",
-  "changes": [
-    {
-      "file": "...",
-      "change_type": "create|edit",
-      "changes": ["..."]
-    }
-  ],
-  "interfaces": ["..."],
-  "dependencies": ["..."],
-  "validation": ["..."]
+  "technical_spec": {
+    "summary": "string",
+    "changes": [
+      {
+        "file": "string",
+        "change_type": "edit|create",
+        "changes": [
+          "string"
+        ]
+      }
+    ],
+    "interfaces": [
+      "string"
+    ],
+    "dependencies": [
+      "string"
+    ],
+    "validation": [
+      "string"
+    ]
+  },
+  "target_files": [
+    "string"
+  ]
 }
+
+============================================================
+RULES
+============================================================
+
+DO NOT output:
+
+- source code
+- code blocks
+- implementation code
+- TypeScript
+- JavaScript
+- Python
+- SQL
+- Markdown
+- prose outside JSON
+
+DO NOT implement the task.
+
+DO NOT invent APIs.
+
+DO NOT invent files.
+
+DO NOT invent database tables.
+
+Use only repository facts supplied in the context.
+
+The technical specification must describe WHAT the Coder
+must implement, not HOW to write every line of code.
+
+target_files MUST contain only files relevant to this task.
+
+============================================================
+FINAL REQUIREMENT
+============================================================
+
+Return JSON ONLY.
+
+First character: {
+
+Last character: }
 """
 
     prompt = f"""
@@ -495,11 +548,20 @@ TARGET FILES:
 REPOSITORY CONTEXT:
 
 {context}
+
+YOUR JOB
+========
+
+Produce the technical implementation contract for this task.
+
+Do NOT write code.
+
+Return exactly the JSON structure specified by the system prompt.
 """
 
     response = call_local_llm(
         prompt,
-        system_prompt
+        ARCHITECT_SYSTEM_PROMPT
     )
 
     try:

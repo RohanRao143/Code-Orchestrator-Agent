@@ -15,7 +15,7 @@ from psycopg2.extras import Json
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/agent"
+    "postgresql://postgres:password@localhost:5432/multi_agent_coder"
 )
 
 DEFAULT_IGNORE_DIRS = {
@@ -1286,59 +1286,50 @@ def build_supervisor_prompt(
         for chunk in chunks
     )
 
-    return f"""
-You are the Supervisor of a multi-agent software
-development system.
-
-Your responsibility is to convert the user requirement
-into an ordered implementation task checklist.
-
-PROJECT STACK:
-
-{json.dumps(stack, indent=2)}
-
-EXISTING REPOSITORY FILES:
-
-{files_text}
-
-RELEVANT CODE CONTEXT:
-
-{context_text}
-
-USER REQUIREMENT:
+    prompt = f"""
+USER REQUIREMENT
+================
 
 {requirement}
 
-IMPORTANT RULES:
 
-1. Do not invent existing files.
-2. If a required file exists, use change_type "edit".
-3. If a required file does not exist, use change_type "create".
-4. Do not modify unrelated files.
-5. Break the requirement into sequential implementation tasks.
-6. Assign every task to an appropriate domain.
-7. Include the exact file path for every affected file.
-8. Tasks must be ordered by dependency.
-9. Return ONLY valid JSON.
+REPOSITORY CONTEXT
+==================
 
-OUTPUT FORMAT:
+{json.dumps(context, indent=2)}
+
+
+YOUR TASK
+=========
+
+Create the ordered implementation task checklist.
+
+Remember:
+
+You are the SUPERVISOR.
+
+Do NOT implement anything.
+
+Return ONLY:
 
 {{
-    "tasks": [
+  "task_checklist": [
+    {{
+      "step_id": 1,
+      "domain": "string",
+      "description": "string",
+      "files_affected": [
         {{
-            "step_id": 1,
-            "domain": "postgres",
-            "description": "Create ...",
-            "files_affected": [
-                {{
-                    "path": "db/schema.sql",
-                    "change_type": "edit"
-                }}
-            ]
+          "path": "string",
+          "change_type": "edit"
         }}
-    ]
+      ]
+    }}
+  ]
 }}
 """
+
+    return prompt
 
 # ============================================================
 # SIMPLE EXAMPLE
