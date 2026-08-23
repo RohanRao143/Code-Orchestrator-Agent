@@ -130,6 +130,10 @@ def run_coder(
         []
     )
 
+    # print(current_task)
+    print(technical_spec)
+    print(sliced_context)
+
     if len(sliced_context) > MAX_CONTEXT_CHARS:
 
         sliced_context = sliced_context[
@@ -302,7 +306,7 @@ Do not return explanations.
 
     response = call_local_llm(
         prompt,
-        system_prompt
+        CODER_SYSTEM_PROMPT
     )
 
     result = extract_json(

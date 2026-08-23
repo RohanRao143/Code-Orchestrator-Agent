@@ -18,11 +18,9 @@ OLLAMA_API = "http://localhost:11434/api/generate"
 
 DEFAULT_MODEL = "llama3.2:3b"
 
-DATABASE_URL = (
-    "dbname=multi_agent_coder"
-    "user=postgres"
-    "password=password"
-    "host=localhost"
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:password@localhost:5432/multi_agent_coder"
 )
 
 MAX_CONTEXT_CHARS = 12000
@@ -294,6 +292,155 @@ Lines: {chunk.get("start_line")}-{chunk.get("end_line")}
     return context
 
 
+def build_architect_context_from_code_graph(
+    state: AgentOrchestratorState,
+    max_chars: int = 16000,
+) -> str:
+    """
+    Build Architect context from the code graph.
+
+    The Architect receives:
+        - current task
+        - relevant files
+        - relevant symbols
+        - relationships
+        - source evidence
+    """
+
+    graph_context = state.get(
+        "relevant_context"
+    )
+
+    if not graph_context:
+        return (
+            "No code graph context is available."
+        )
+
+    task = state.get(
+        "current_task",
+        {}
+    )
+
+    task_files = {
+        item.get("path")
+        for item in task.get(
+            "files_affected",
+            []
+        )
+        if isinstance(item, dict)
+    }
+
+    parts = [
+        "CURRENT TASK",
+        json.dumps(
+            task,
+            indent=2
+        ),
+        "",
+        "CODE GRAPH",
+    ]
+
+    # ---------------------------------------------------------
+    # Files
+    # ---------------------------------------------------------
+
+    for file_info in graph_context.get(
+        "existing_files",
+        []
+    ):
+
+        path = file_info.get(
+            "path"
+        )
+
+        if not task_files or path in task_files:
+
+            parts.append(
+                f"""
+FILE: {path}
+LANGUAGE: {file_info.get('language')}
+TYPE: {file_info.get('file_type')}
+"""
+            )
+
+    # ---------------------------------------------------------
+    # Symbols
+    # ---------------------------------------------------------
+
+    parts.append(
+        "\nRELEVANT SYMBOLS"
+    )
+
+    for symbol in graph_context.get(
+        "symbols",
+        []
+    ):
+
+        if (
+            not task_files
+            or symbol.get("file") in task_files
+        ):
+
+            parts.append(
+                f"""
+{symbol.get("qualified_name") or symbol.get("symbol_name")}
+FILE: {symbol.get("file")}
+TYPE: {symbol.get("symbol_type")}
+LINES: {symbol.get("start_line")}-{symbol.get("end_line")}
+SIGNATURE: {symbol.get("signature") or ""}
+"""
+            )
+
+    # ---------------------------------------------------------
+    # Relationships
+    # ---------------------------------------------------------
+
+    parts.append(
+        "\nRELATIONSHIPS"
+    )
+
+    for edge in graph_context.get(
+        "dependencies",
+        []
+    ):
+
+        parts.append(
+            json.dumps(
+                edge,
+                sort_keys=True
+            )
+        )
+
+    # ---------------------------------------------------------
+    # Source
+    # ---------------------------------------------------------
+
+    parts.append(
+        "\nSOURCE EVIDENCE"
+    )
+
+    for chunk in graph_context.get(
+        "chunks",
+        []
+    ):
+
+        if (
+            not task_files
+            or chunk.get("file") in task_files
+        ):
+
+            parts.append(
+                f"""
+FILE: {chunk.get("file")}
+LINES: {chunk.get("start_line")}-{chunk.get("end_line")}
+
+{chunk.get("content")}
+"""
+            )
+
+    return "\n".join(parts)[:max_chars]
+
+
 # ============================================================
 # EXTRACT JSON
 # ============================================================
@@ -430,7 +577,7 @@ def run_architect(
                 str(file_info)
             )
 
-    context = build_architect_context(
+    context = build_architect_context_from_code_graph(
         state
     )
 

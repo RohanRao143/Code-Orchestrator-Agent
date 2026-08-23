@@ -36,6 +36,8 @@ from coder import run_coder
 from reviewer import (
     run_reviewer,
     route_after_review,
+    advance_to_next_task,
+    route_after_task_advance
 )
 
 
@@ -50,10 +52,14 @@ workflow = StateGraph(AgentOrchestratorState)
 # NODES
 # ============================================================
 workflow.add_node("supervisor", run_supervisor)
-# workflow.add_node("architect", run_architect)
-# workflow.add_node("coder", run_coder)
-# workflow.add_node("reviewer", run_reviewer)
+workflow.add_node("architect", run_architect)
+workflow.add_node("coder", run_coder)
+workflow.add_node("reviewer", run_reviewer)
 
+workflow.add_node(
+    "next_task",
+    advance_to_next_task
+)
 
 # ============================================================
 # ENTRY
@@ -63,23 +69,36 @@ workflow.set_entry_point("supervisor")
 # # ============================================================
 # # SUPERVISOR → ARCHITECT
 # # ============================================================
-# workflow.add_edge("supervisor", "architect")
+workflow.add_edge("supervisor", "architect")
 
 # # ============================================================
 # # ARCHITECT → CODER
 # # ============================================================
-# workflow.add_edge("architect", "coder")
+workflow.add_edge("architect", "coder")
 
 # # ============================================================
 # # CODER → REVIEWER
 # # ============================================================
-# workflow.add_edge("coder", "reviewer")
+workflow.add_edge("coder", "reviewer")
 
 # # ============================================================
 # # REVIEWER ROUTING
 # # ============================================================
 
-# workflow.add_conditional_edges("reviewer", route_after_review, { "save_and_flush": END, "coder": "coder" })
+workflow.add_conditional_edges("reviewer", route_after_review, { "save_and_flush": END, "coder": "coder", "next_task": "next_task" })
+
+# ============================================================
+# NEXT TASK
+# ============================================================
+
+workflow.add_conditional_edges(
+    "next_task",
+    route_after_task_advance,
+    {
+        "architect": "architect",
+        "save_and_flush": END,
+    }
+)
 
 # ============================================================
 # COMPILE

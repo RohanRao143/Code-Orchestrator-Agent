@@ -391,3 +391,94 @@ def route_after_review(
     # --------------------------------------------------------
 
     return "coder"
+
+
+def advance_to_next_task(
+    state: AgentOrchestratorState
+):
+    """
+    Move the orchestrator from the completed task
+    to the next Supervisor-generated task.
+
+    This node does NOT call an LLM.
+    It only changes orchestration state.
+    """
+
+    task_checklist = state.get(
+        "task_checklist",
+        []
+    )
+
+    current_index = state.get(
+        "current_task_index",
+        0
+    )
+
+    next_index = current_index + 1
+
+    # ============================================================
+    # NO MORE TASKS
+    # ============================================================
+
+    if next_index >= len(task_checklist):
+
+        state["current_task_index"] = next_index
+
+        state["current_task"] = {}
+
+        return state
+
+    # ============================================================
+    # SELECT NEXT TASK
+    # ============================================================
+
+    next_task = task_checklist[next_index]
+
+    state["current_task_index"] = next_index
+
+    state["current_task"] = next_task
+
+    # ============================================================
+    # RESET TASK-SPECIFIC STATE
+    # ============================================================
+
+    state["target_files"] = []
+
+    state["sliced_code_context"] = ""
+
+    state["technical_spec"] = ""
+
+    state["generated_files"] = {}
+
+    state["active_target_file"] = ""
+
+    state["generated_code"] = ""
+
+    state["compilation_status"] = "pending"
+
+    state["reviewer_feedback"] = None
+
+    state["review_result"] = {}
+
+    state["retry_count"] = 0
+
+    return state
+
+def route_after_task_advance(
+    state: AgentOrchestratorState
+) -> str:
+
+    task_checklist = state.get(
+        "task_checklist",
+        []
+    )
+
+    current_index = state.get(
+        "current_task_index",
+        0
+    )
+
+    if current_index >= len(task_checklist):
+        return "save_and_flush"
+
+    return "architect"

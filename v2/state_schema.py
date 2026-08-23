@@ -1,31 +1,41 @@
+# state_schema.py
+
 from typing import TypedDict, List, Dict, Optional, Any
 
 
 class AgentOrchestratorState(TypedDict, total=False):
 
     # ============================================================
-    # USER / WORKFLOW
+    # WORKFLOW
     # ============================================================
 
     workflow_id: int
     user_requirement: str
 
     # ============================================================
-    # PROJECT CONTEXT
+    # CONTEXT
     # ============================================================
 
     context_project_id: int
 
     relevant_context: Dict[str, Any]
 
+    code_graph_context: Dict[str, Any]
+
+    code_graph_context_text: str
+
+    supervisor_prompt: str
+
     # ============================================================
-    # SUPERVISOR
+    # PLANNING
     # ============================================================
 
     task_checklist: List[Dict[str, Any]]
 
     current_task_index: int
 
+    # IMPORTANT:
+    # This is ONE task, not the entire checklist.
     current_task: Dict[str, Any]
 
     # ============================================================
@@ -42,11 +52,11 @@ class AgentOrchestratorState(TypedDict, total=False):
     # CODER
     # ============================================================
 
+    generated_files: Dict[str, str]
+
     active_target_file: str
 
     generated_code: str
-
-    generated_files: Dict[str, str]
 
     # ============================================================
     # REVIEWER
@@ -59,7 +69,7 @@ class AgentOrchestratorState(TypedDict, total=False):
     review_result: Dict[str, Any]
 
     # ============================================================
-    # RETRY
+    # RETRIES
     # ============================================================
 
     retry_count: int

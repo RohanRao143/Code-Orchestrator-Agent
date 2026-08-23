@@ -1,5 +1,6 @@
 # supervisor.py
 
+import os
 import json
 import requests
 import psycopg2
@@ -9,8 +10,12 @@ from typing import Any
 from state_schema import AgentOrchestratorState
 
 from app_context import (
-    get_relevant_context,
+    # get_relevant_context,
+    get_code_graph_context,
+    format_code_graph_context,
     build_supervisor_prompt,
+    build_supervisor_prompt_code_graph,
+    visualize_ui_graph,
 )
 
 
@@ -20,12 +25,11 @@ from app_context import (
 
 OLLAMA_API = "http://localhost:11434/api/generate"
 DEFAULT_MODEL = "llama3.2:3b"
+# DEFAULT_MODEL = "phi4-mini:latest"
 
-DATABASE_URL = (
-    "dbname=multi_agent_coder"
-    "user=postgres"
-    "password=password"
-    "host=localhost"
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:password@localhost:5432/multi_agent_coder"
 )
 
 
@@ -49,15 +53,15 @@ def call_local_llm(
 
         "options": {
             "num_ctx": 32000,
-            "temperature": 0.2,
-            "num_predict": 1024,
+            "temperature": 0.1,
+            "num_predict": 8192,
         },
     }
 
     response = requests.post(
         OLLAMA_API,
         json=payload,
-        timeout=300,
+        timeout=9000,
     )
 
     response.raise_for_status()
@@ -162,7 +166,7 @@ def normalize_task_checklist(
 
         files = []
 
-        for file in files_affected:
+        for file_info in files_affected:
 
             # ------------------------------------------------
             # New format:
@@ -225,7 +229,7 @@ def normalize_task_checklist(
                 ""
             ),
 
-            "files_affected": normalized_files,
+            "files_affected": files,
         })
 
     return normalized
@@ -412,22 +416,60 @@ def run_supervisor(
     # 3. RETRIEVE RELEVANT CONTEXT
     # ========================================================
 
-    context = get_relevant_context(
+    # context = get_relevant_context(
+    #     requirement=user_requirement,
+    #     project_id=project_id,
+
+    #     max_files=15,
+    #     max_chunks=40,
+    # )
+
+    # UPGRADED FROM LEXICAL CHUNKING RETRIEVAL TO CODE GRAPH NETWORK
+
+    context = get_code_graph_context(
         requirement=user_requirement,
         project_id=project_id,
+        max_files=20,
+        max_symbols=40,
+        max_chunks=20,
+        graph_depth=2,
+    )
 
-        max_files=15,
-        max_chunks=40,
+    context_text = format_code_graph_context(
+        context,
+        max_chars=18000,
+    )
+
+    # ========================================================
+    # 3A. BUILD UI COMPONENT GRAPH
+    # ========================================================
+
+    ui_graph_text = visualize_ui_graph(
+        project_id=project_id,
+        max_depth=5,
+        output="return",
+    )
+
+
+    # ========================================================
+    # 4. BUILD SUPERVISOR PROMPT
+    # ========================================================
+
+    prompt = build_supervisor_prompt_code_graph(
+        requirement=user_requirement,
+        context=context,
+        context_text=context_text,
+        ui_graph_text=ui_graph_text,
     )
 
     # ========================================================
     # 4. BUILD SUPERVISOR PROMPT
     # ========================================================
 
-    prompt = build_supervisor_prompt(
-        requirement=user_requirement,
-        context=context,
-    )
+    # prompt = build_supervisor_prompt(
+    #     requirement=user_requirement,
+    #     context=context,
+    # )
 
     # ========================================================
     # 5. SYSTEM PROMPT
@@ -620,12 +662,52 @@ The last character of your response MUST be '}'.
 
     state["current_task_index"] = 0
 
-    # Keep context available for later agents
+    # ------------------------------------------------------------
+    # SELECT FIRST TASK
+    # ------------------------------------------------------------
+
+    if not task_checklist:
+        raise RuntimeError(
+            "Supervisor produced an empty task checklist."
+        )
+
+    first_task = task_checklist[0]
+
+    state["current_task"] = first_task
+
+    # ------------------------------------------------------------
+    # Context
+    # ------------------------------------------------------------
+
     state["context_project_id"] = project_id
 
     state["relevant_context"] = context
 
     state["supervisor_prompt"] = prompt
+
+    # ------------------------------------------------------------
+    # Reset execution state
+    # ------------------------------------------------------------
+
+    state["target_files"] = []
+
+    state["sliced_code_context"] = ""
+
+    state["technical_spec"] = ""
+
+    state["generated_files"] = {}
+
+    state["active_target_file"] = ""
+
+    state["generated_code"] = ""
+
+    state["compilation_status"] = "pending"
+
+    state["reviewer_feedback"] = None
+
+    state["review_result"] = {}
+
+    state["retry_count"] = 0
 
     return state
 

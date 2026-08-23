@@ -1,5 +1,7 @@
-from app_context import init_context
+from app_context import init_context_code_graph
 from orchestrator import app
+
+from app_context import visualize_ui_graph
 
 
 # ============================================================
@@ -12,10 +14,13 @@ from orchestrator import app
 #     "./database",
 # ])
 
-project_id = init_context([
+project_id = init_context_code_graph([
     "../../../Repo-0011-BeED-UI"
 ])
 
+# visualize_ui_graph(
+#     project_id=project_id
+# )
 
 # ============================================================
 # USER REQUIREMENT
@@ -36,9 +41,7 @@ project_id = init_context([
 # """
 
 requirement = """
-Add enable preview option inside experio over oview settings, with a preview icon and a toggle button.
-
-Enabling it should send preview_enabled boolean option property to api 
+In the file learner-feedback.component.ts, Add soft property isHidden for each stage object in learner feedback page, when isHidden set to true the table should hide all the lesson blocks under that stage. clicking on the stage header should work like a toggle. 
 """
 
 
